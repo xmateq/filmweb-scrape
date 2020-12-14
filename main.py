@@ -3,56 +3,55 @@ import jmespath
 from bs4 import BeautifulSoup
 import re
 
-final_results = []
-titles = []
-posters = []
-rates = []
-genres = []
-directors = []
-results = {}
 
-response = requests.get('https://www.filmweb.pl/serials/search?endRate=10&orderBy=popularity&descending=true&startRate=9')
-soup = BeautifulSoup(response.content, 'html.parser')
-results_list = soup.find(class_="resultsList hits")
+def find_movies():
+    response = requests.get('https://www.filmweb.pl/serials/search?endRate=10&orderBy=popularity&descending=true&startRate=9')
+    soup = BeautifulSoup(response.content, 'html.parser')
+    films = soup.find(class_="resultsList hits")
+    return films
 
-results_list_posters = results_list.find_all(class_='poster__image')
-for poster in results_list_posters:
-    posters.append(jmespath.search('content', poster))
 
-results_list_titles = results_list.find_all(class_='filmPreview__title')
-for title in results_list_titles:
-    titles.append(title.get_text())
+def find_movie_poster(movie):
+    return jmespath.search('content', movie.find(class_='poster__image'))
 
-results_list_rates = results_list.find_all(class_="rateBox__rate")
-for rate in results_list_rates:
-    rates.append(rate.get_text())
 
-for genre in results_list:
-    genre1 = genre.find(class_="filmPreview__info filmPreview__info--genres")
+def find_movie_title(movie):
+    title = movie.find(class_='filmPreview__title')
+    return title.get_text()
+
+
+def find_movie_rate(movie):
+    rate = movie.find(class_='rateBox__rate')
+    return rate.get_text()
+
+
+def find_movie_genre(movie):
     try:
-        genres.append(re.findall('[A-Z][^A-Z]*', genre1.get_text()))
+        genre = movie.find(class_='filmPreview__info filmPreview__info--genres')
+        return re.findall('[A-Z][^A-Z]*', genre.get_text())
     except:
-        genres.append(None)
+        return "None"
 
-for director in results_list:
-    director1 = director.find(class_="filmPreview__info filmPreview__info--directors")
+
+def find_movie_director(movie):
     try:
-        directors.append(director1.get_text().lstrip('twórca'))
+        director = movie.find(class_='filmPreview__info filmPreview__info--directors')
+        return director.get_text().lstrip('twórca')
     except:
-        directors.append(None)
-
-tuples_list = (zip(titles, posters, rates, genres, directors))
-keys = ('title', 'poster', 'rate', 'genre', 'director') * 10
+        return "None"
 
 
-def convert(tuple, dic):
-    dic = dict(tuple)
-    return dic
+def create_dictionaries():
+    final = []
+    for movie in find_movies():
+        result_dic = {
+            'title': find_movie_title(movie),
+            'poster': find_movie_poster(movie),
+            'rate': find_movie_rate(movie),
+            'genre': find_movie_genre(movie),
+            'director': find_movie_director(movie)
+        }
+        final.append(result_dic)
+    return final
 
-
-for ele in tuples_list:
-    tuple = list(zip(keys, ele))
-    tuple_dict = convert(tuple, results)
-    final_results.append(tuple_dict)
-
-print(final_results)
+print(create_dictionaries())
