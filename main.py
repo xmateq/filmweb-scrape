@@ -1,58 +1,65 @@
 import requests
 import jmespath
 from bs4 import BeautifulSoup
-import re
 
-final_results = []
-titles = []
-posters = []
-rates = []
-genres = []
-directors = []
-results = {}
-
-response = requests.get('https://www.filmweb.pl/serials/search?endRate=10&orderBy=popularity&descending=true&startRate=9')
-soup = BeautifulSoup(response.content, 'html.parser')
-results_list = soup.find(class_="resultsList hits")
-
-results_list_posters = results_list.find_all(class_='poster__image')
-for poster in results_list_posters:
-    posters.append(jmespath.search('content', poster))
-
-results_list_titles = results_list.find_all(class_='filmPreview__title')
-for title in results_list_titles:
-    titles.append(title.get_text())
-
-results_list_rates = results_list.find_all(class_="rateBox__rate")
-for rate in results_list_rates:
-    rates.append(rate.get_text())
-
-for genre in results_list:
-    genre1 = genre.find(class_="filmPreview__info filmPreview__info--genres")
-    try:
-        genres.append(re.findall('[A-Z][^A-Z]*', genre1.get_text()))
-    except:
-        genres.append(None)
-
-for director in results_list:
-    director1 = director.find(class_="filmPreview__info filmPreview__info--directors")
-    try:
-        directors.append(director1.get_text().lstrip('twórca'))
-    except:
-        directors.append(None)
-
-tuples_list = (zip(titles, posters, rates, genres, directors))
-keys = ('title', 'poster', 'rate', 'genre', 'director') * 10
+MOVIES_URL = 'https://www.filmweb.pl/serials/search?endRate=10&orderBy=popularity&descending=true&startRate=9&page={}'
+PAGES_TO_GET = 20
 
 
-def convert(tuple, dic):
-    dic = dict(tuple)
-    return dic
+def find_movies_of_n_pages(PAGES_TO_GET: int) -> list:
+
+    def find_movies(page: int):
+        for _ in range(3):
+            response = requests.get(MOVIES_URL.format(page))
+            print(response.status_code)
+            if response.status_code == requests.codes.ok:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                films = soup.find(class_="resultsList hits")
+                if films:
+                    return films
+        raise Exception("Invalid response received")
 
 
-for ele in tuples_list:
-    tuple = list(zip(keys, ele))
-    tuple_dict = convert(tuple, results)
-    final_results.append(tuple_dict)
 
-print(final_results)
+
+    def get_movie_property_text(movie, classname: str) -> str:
+        result = movie.find(class_=classname)
+        return result.get_text()
+
+    def find_movie_poster(movie) -> list:
+        return jmespath.search('content', movie.find(class_='poster__image'))
+
+    def find_movie_title(movie) -> str:
+        return get_movie_property_text(movie, 'filmPreview__title')
+
+    def find_movie_rate(movie) -> str:
+        return get_movie_property_text(movie, 'rateBox__rate')
+
+    def find_movie_genre(movie) -> list:
+        try:
+            return [genre.get_text() for genre in movie.find(class_='filmPreview__info filmPreview__info--genres').find_all('a')]
+        except AttributeError:
+            return []
+
+    def find_movie_director(movie) -> list:
+        try:
+            return [director.get_text() for director in movie.find(class_='filmPreview__info filmPreview__info--directors').find_all('a')]
+        except AttributeError:
+            return []
+
+    def get_movie(movie) -> dict:
+        return {
+            'title': find_movie_title(movie),
+            'poster': find_movie_poster(movie),
+            'rate': find_movie_rate(movie),
+            'genre': find_movie_genre(movie),
+            'director': find_movie_director(movie)
+        }
+
+    def final_results(page: int) -> list:
+        return [get_movie(movie) for movie in find_movies(page)]
+
+    return [final_results(page) for page in range(1, PAGES_TO_GET+1)]
+
+
+print(find_movies_of_n_pages(PAGES_TO_GET))
