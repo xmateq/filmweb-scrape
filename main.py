@@ -19,9 +19,6 @@ def find_movies_of_n_pages(PAGES_TO_GET: int) -> list:
                     return films
         raise Exception("Invalid response received")
 
-
-
-
     def get_movie_property_text(movie, classname: str) -> str:
         result = movie.find(class_=classname)
         return result.get_text()
